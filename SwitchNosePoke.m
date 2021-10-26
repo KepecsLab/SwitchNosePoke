@@ -40,8 +40,6 @@ if isempty(fieldnames(TaskParameters))
     TaskParameters.GUI.rewardAmount = 5;
     TaskParameters.GUI.CenterPortRewAmount = 0.5;
     TaskParameters.GUI.SwitchPortRewAmount = 0.5;
-    TaskParameters.GUI.ForceSwitchTraining =0;
-    TaskParameters.GUIMeta.ForceSwitchTraining.Style = 'checkbox';
     
     TaskParameters.GUI.ErrorSwitch =0;
     TaskParameters.GUIMeta.ErrorSwitch.Style = 'checkbox';
@@ -127,11 +125,14 @@ end
 
 %% Initialize plots
 BpodSystem.ProtocolFigures.SideOutcomePlotFig = figure('Position', TaskParameters.Figures.OutcomePlot.Position,'name','Outcome plot','numbertitle','off', 'MenuBar', 'none', 'Resize', 'off');
-BpodSystem.GUIHandles.OutcomePlot.HandleOutcome = axes('Position',    [  .055            .15 .91 .3]);
-BpodSystem.GUIHandles.OutcomePlot.HandleGracePeriod = axes('Position',  [1*.05           .6  .1  .3], 'Visible', 'off');
-BpodSystem.GUIHandles.OutcomePlot.HandleTrialRate = axes('Position',    [3*.05 + 2*.08   .6  .1  .3], 'Visible', 'off');
-BpodSystem.GUIHandles.OutcomePlot.HandleST = axes('Position',           [5*.05 + 4*.08   .6  .1  .3], 'Visible', 'off');
-BpodSystem.GUIHandles.OutcomePlot.HandleMT = axes('Position',           [6*.05 + 6*.08   .6  .1  .3], 'Visible', 'off');
+BpodSystem.GUIHandles.OutcomePlot.HandleRewOutcome = axes('Position',    [  .055          .38 .91 .2]);
+BpodSystem.GUIHandles.OutcomePlot.HandleOutcome = axes('Position',    [  .055          .1 .91 .2]);
+
+%BpodSystem.GUIHandles.OutcomePlot.HandleOutcome = axes('Position',    [  .055            .15 .91 .3]);
+BpodSystem.GUIHandles.OutcomePlot.HandleGracePeriod = axes('Position',  [1*.05           .65  .1  .3], 'Visible', 'off');
+BpodSystem.GUIHandles.OutcomePlot.HandleTrialRate = axes('Position',    [3*.05 + 2*.08   .65  .1  .3], 'Visible', 'off');
+BpodSystem.GUIHandles.OutcomePlot.HandleST = axes('Position', [5*.05 + 4*.08   .65  .1  .3], 'Visible', 'off');
+BpodSystem.GUIHandles.OutcomePlot.HandleMT = axes('Position', [6*.05 + 6*.08   .65  .1  .3], 'Visible', 'off');
 NosePoke_PlotSideOutcome(BpodSystem.GUIHandles.OutcomePlot,'init');
 
 %% Main loop
@@ -167,7 +168,7 @@ global TaskParameters
 LeftPort = floor(mod(TaskParameters.GUI.Ports_LMR/100,10));
 CenterPort = floor(mod(TaskParameters.GUI.Ports_LMR/10,10));
 RightPort = mod(TaskParameters.GUI.Ports_LMR,10);
-SwitchPort=str2num(TaskParameters.GUI.Ports_Switch);
+SwitchPort=TaskParameters.GUI.Ports_Switch;
 
 LeftPortOut = strcat('Port',num2str(LeftPort),'Out');
 CenterPortOut = strcat('Port',num2str(CenterPort),'Out');
@@ -187,7 +188,7 @@ SwitchValve = 2^(SwitchPort-1);
 
 LeftValveTime  = GetValveTimes(BpodSystem.Data.Custom.RewardMagnitude(iTrial,1), LeftPort);
 RightValveTime  = GetValveTimes(BpodSystem.Data.Custom.RewardMagnitude(iTrial,2), RightPort);
-SwitchValveTime = GetValveTimes(BpodSystem.Data.Custom.SwitchPortRewAmount(iTrial), SwitchPort);
+SwitchValveTime = GetValveTimes(BpodSystem.Data.Custom.SwitchPortRewAmount, SwitchPort);
 
 
 if rand(1,1) <= TaskParameters.GUI.CenterPortProb && TaskParameters.GUI.Jackpot == 4
@@ -340,22 +341,27 @@ end
  %TaskParameters.GUI.ForceSwitch is a checkbox. When true, it forces entry
  %into the switch port when the reward magnitude on both the left and right
  %side are < 8 uL, else it defaults to the left right nosepoke
- if TaskParameters.GUI.ForceSwitch && BpodSystem.BaitedSwitch(iTrial)
-      sma = AddState(sma, 'Name', 'wait_Sin',...
+ if TaskParameters.GUI.ForceSwitch && BpodSystem.Data.Custom.BaitedSwitch(iTrial)
+     sma = AddState(sma, 'Name', 'wait_Sin',...
     'Timer',TaskParameters.GUI.ChoiceDeadline,...
     'StateChangeConditions', {SwitchPortIn,'wait_Sw_start','Tup','ITI'},...
-    'OutputActions',{strcat('PWM',num2str(SwitchPort)),SwitchLight});
- elseif TaskParameters.GUI.ForceSwitch && ~BpodSystem.BaitedSwitch(iTrial)
-      sma = AddState(sma, 'Name', 'wait_Sin',...Ch
+    'OutputActions',{strcat('PWM',num2str(SwitchPort)),255});
+ elseif TaskParameters.GUI.ForceSwitch && ~BpodSystem.Data.Custom.BaitedSwitch(iTrial)
+    sma = AddState(sma, 'Name', 'wait_Sin',...
     'Timer',TaskParameters.GUI.ChoiceDeadline,...
     'StateChangeConditions', {LeftPortIn,'wait_L_start',RightPortIn,'wait_R_start','Tup','ITI'},...
-    'OutputActions',{strcat('PWM',num2str(LeftPort)),LeftLight,strcat('PWM',num2str(RightPort),RightLight)};
+    'OutputActions',{strcat('PWM',num2str(LeftPort)),255,strcat('PWM',num2str(RightPort)),255});
      
- else
+ elseif BpodSystem.Data.Custom.BaitedSwitch(iTrial)
      sma = AddState(sma, 'Name', 'wait_Sin',...
     'Timer',TaskParameters.GUI.ChoiceDeadline,...
     'StateChangeConditions', {LeftPortIn,'wait_L_start',RightPortIn,'wait_R_start',SwitchPortIn,'wait_Sw_start','Tup','ITI'},...
-    'OutputActions',{strcat('PWM',num2str(LeftPort)),LeftLight,strcat('PWM',num2str(RightPort)),RightLight, strcat('PWM',num2str(SwitchPort)),SwitchLight});
+    'OutputActions',{strcat('PWM',num2str(LeftPort)),255,strcat('PWM',num2str(RightPort)),255, strcat('PWM',num2str(SwitchPort)),255});
+ else
+     sma = AddState(sma, 'Name', 'wait_Sin',...
+    'Timer',TaskParameters.GUI.ChoiceDeadline,...
+    'StateChangeConditions', {LeftPortIn,'wait_L_start',RightPortIn,'wait_R_start','Tup','ITI'},...
+    'OutputActions',{strcat('PWM',num2str(LeftPort)),255,strcat('PWM',num2str(RightPort)),255});
  end
     
 
@@ -391,15 +397,23 @@ sma = AddState(sma, 'Name', 'wait_R_grace',...
 sma = AddState(sma, 'Name', 'wait_Sw_start',...
     'Timer',0,...
     'StateChangeConditions', {'Tup','wait_Sw'},...
-    'OutputActions',{'GlobalTimerTrig',2});
+    'OutputActions',{'SoftCode',12,'GlobalTimerTrig',2});
 sma = AddState(sma, 'Name', 'wait_Sw',...
     'Timer',DelayTime,...
     'StateChangeConditions', {'Tup',SwitchWaitAction,'GlobalTimer2_End',SwitchWaitAction,SwitchPortOut,'wait_Sw_grace'},...
     'OutputActions',{strcat('PWM',num2str(RightPort)),0});
-sma = AddState(sma, 'Name', 'wait_Sw_grace',...
-    'Timer',TaskParameters.GUI.DelayGracePeriod,...
-    'StateChangeConditions', {'Tup','ITI','GlobalTimer2_End',SwitchWaitAction,SwitchPortIn,'wait_Sw'},...
-    'OutputActions',{});
+
+if TaskParameters.GUI.ErrorSwitch
+    sma = AddState(sma, 'Name', 'wait_Sw_grace',...
+        'Timer',TaskParameters.GUI.DelayGracePeriod,...
+        'StateChangeConditions', {'Tup','ErrorSwitch','GlobalTimer2_End',SwitchWaitAction,SwitchPortIn,'wait_Sw'},...
+        'OutputActions',{});
+else
+    sma = AddState(sma, 'Name', 'wait_Sw_grace',...
+        'Timer',TaskParameters.GUI.DelayGracePeriod,...
+        'StateChangeConditions', {'Tup','ITI','GlobalTimer2_End',SwitchWaitAction,SwitchPortIn,'wait_Sw'},...
+        'OutputActions',{});
+end
 
 
 
@@ -447,7 +461,7 @@ sma = AddState(sma, 'Name', 'EarlyWithdrawal',...
 sma = AddState(sma, 'Name', 'ErrorSwitch',...
     'Timer', TaskParameters.GUI.EarlyWithdrawalTimeOut,...
     'StateChangeConditions', {'Tup','ITI'},...
-    'OutputActions', {'SoftCode',21});
+    'OutputActions', {'SoftCode',PunishSoundAction});
 
 
 if TaskParameters.GUI.VI
@@ -523,8 +537,8 @@ elseif any(strncmp('wait_R',statesThisTrial,6))
 elseif any(strncmp('wait_Sw',statesThisTrial,6))
     BpodSystem.Data.Custom.ChoiceLeft(iTrial) = nan;
     BpodSystem.Data.Custom.ChoiceSwitch(iTrial)=1;
-    BpodSystem.Data.Custom.MT(iTrial) = BpodSystem.Data.RawEvents.Trial{iTrial}.States.wait_S_start(1,2) - BpodSystem.Data.RawEvents.Trial{iTrial}.States.wait_Sin(1,1);
-    FeedbackPortTimes = BpodSystem.Data.RawEvents.Trial{end}.States.wait_S_start;
+    BpodSystem.Data.Custom.MT(iTrial) = BpodSystem.Data.RawEvents.Trial{iTrial}.States.wait_Sw_start(1,2) - BpodSystem.Data.RawEvents.Trial{iTrial}.States.wait_Sin(1,1);
+    FeedbackPortTimes = BpodSystem.Data.RawEvents.Trial{end}.States.wait_Sw_start;
     BpodSystem.Data.Custom.DT(iTrial) = FeedbackPortTimes(end,end)-FeedbackPortTimes(1,1);
 elseif any(strcmp('EarlyWithdrawal',statesThisTrial))
     BpodSystem.Data.Custom.EarlyWithdrawal(iTrial) = true;
@@ -557,7 +571,9 @@ end
 
 % correct/error?
 BpodSystem.Data.Custom.Correct(iTrial) = NaN;
-if TaskParameters.GUI.LightGuided
+if ~TaskParameters.GUI.LightGuided && (~isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial)))
+    BpodSystem.Data.Custom.Correct(iTrial) = true;
+elseif TaskParameters.GUI.LightGuided
     if BpodSystem.Data.Custom.LightLeft(iTrial) && BpodSystem.Data.Custom.ChoiceLeft(iTrial)==1
         BpodSystem.Data.Custom.Correct(iTrial) = true;
     elseif ~BpodSystem.Data.Custom.LightLeft(iTrial) && BpodSystem.Data.Custom.ChoiceLeft(iTrial)==0
@@ -568,9 +584,7 @@ if TaskParameters.GUI.LightGuided
         BpodSystem.Data.Custom.Correct(iTrial) = false;
     end
 else
-    if ~isnan(BpodSystem.Data.Custom.ChoiceLeft)
-        BpodSystem.Data.Custom.Correct(iTrial) = true;
-    end
+    BpodSystem.Data.Custom.Correct(iTrial) = true;
 end
 
 %% initialize next trial values
@@ -588,8 +602,8 @@ BpodSystem.Data.Custom.RewardAvailable(iTrial+1) = rand(1,1)<TaskParameters.GUI.
 BpodSystem.Data.Custom.RewardDelay(iTrial+1) = randn(1,1)*TaskParameters.GUI.DelaySigma+TaskParameters.GUI.DelayMean;
 
 %Switch housekeeping
-BpodSystem.Data.Custom.ChoiceSwitch(iTrial+1) = NaN;
-BpodSystem.Data.Custom.BaitedSwitch(iTrial+1) =NaN;
+BpodSystem.Data.Custom.ChoiceSwitch(iTrial+1) = 0;
+BpodSystem.Data.Custom.BaitedSwitch(iTrial+1) =0;
 
 
 %stimuli
@@ -621,12 +635,12 @@ if BpodSystem.Data.Custom.ChoiceLeft(iTrial) == 1 && TaskParameters.GUI.Deplete
 elseif BpodSystem.Data.Custom.ChoiceLeft(iTrial) == 0 && TaskParameters.GUI.Deplete
     BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,2) = BpodSystem.Data.Custom.RewardMagnitude(iTrial,2)*TaskParameters.GUI.DepleteRate;
     BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,1) = BpodSystem.Data.Custom.RewardMagnitude(iTrial,1);
-elseif isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial))  && BpodSystem.Data.Custom.ChoiceSwitch && BpodSystem.Data.Custom.BaitedSwitch
+elseif isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial))  && BpodSystem.Data.Custom.ChoiceSwitch(iTrial) && BpodSystem.Data.Custom.BaitedSwitch(iTrial)
     BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:) = [TaskParameters.GUI.rewardAmount,TaskParameters.GUI.rewardAmount];
-elseif isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial))  && BpodSystem.Data.Custom.ChoiceSwitch && ~BpodSystem.Data.Custom.BaitedSwitch
+elseif isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial))  && BpodSystem.Data.Custom.ChoiceSwitch(iTrial) && ~BpodSystem.Data.Custom.BaitedSwitch(iTrial)
     BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:) = BpodSystem.Data.Custom.RewardMagnitude(iTrial,:);
 else
-    BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:) = [TaskParameters.GUI.rewardAmount,TaskParameters.GUI.rewardAmount];
+    BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:) =  BpodSystem.Data.Custom.RewardMagnitude(iTrial,:);
 end
 
 
@@ -637,12 +651,13 @@ end
 %mean reward for thes witch port is greater than the mean reward for the
 %left and right ports. Only baitedswitch==1 resets the left and right
 %magnitudes.
-if TaskParameters.GUI.AlwaysSwitch && ~isnan(BpodSystem.Data.Custom.ChoiceLeft(iTrial))
+if TaskParameters.GUI.AlwaysSwitch
     BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=true;
-elseif TaskParameters.GUI.ForceSwitch 
-    BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=sum(BpodSystem.Data.Custom.RewardMagnitude(iTrial)>8)==2;
+elseif TaskParameters.GUI.ForceSwitch
+    BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=sum(BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:)<4)==2;
+
 elseif TaskParameters.GUI.MVT
-    BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=TaskParameters.GUI.SwitchPortRew(iTrial+1)>mean(BpodSystem.Data.Custom.RewardMagnitude(iTrial+1));
+    BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=TaskParameters.GUI.SwitchPortRewAmount>mean(BpodSystem.Data.Custom.RewardMagnitude(iTrial+1,:));
 else
     BpodSystem.Data.Custom.BaitedSwitch(iTrial+1)=false;
 end
